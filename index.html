@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>客戶名單（快速查詢＋一鍵升級｜即時刪除顯示）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; font-size: 14px; }
+    th { background: #f8fafc; text-align: left; }
+    .skeleton { position: relative; overflow: hidden; background: #f1f5f9; }
+    .skeleton::after { content:""; position:absolute; inset:0; transform: translateX(-100%);
+      background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+      animation: shimmer 1.2s infinite;
+    }
+    @keyframes shimmer { 100% { transform: translateX(100%);} }
+  
+    /* Better hit area and cursor for row action buttons */
+    [data-act="del"], [data-act="edit"] { cursor: pointer; }
+    .btn-row { padding: 6px 10px; border-radius: 0.5rem; font-size: 12px; line-height: 1; }
+    .btn-row-del { background: #dc2626; color: #fff; }
+    .btn-row-edit { background: #ffffff; border: 1px solid #cbd5e1; }
+
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-5xl mx-auto min-h-screen flex flex-col">
+    <header class="sticky top-0 bg-white/90 backdrop-blur border-b border-slate-200 z-40">
+      <div class="px-4 py-3 flex items-center justify-between">
+        <h1 class="text-lg font-semibold">客戶名單（快速查詢＋一鍵升級｜即時刪除顯示）</h1>
+        <div class="flex items-center gap-2">
+          <button id="btnUpgrade" class="text-sm px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:opacity-90 active:scale-95">一鍵升級索引欄位</button>
+          <button id="btnExport" class="text-sm px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 active:scale-95">匯出CSV</button>
+        </div>
+      </div>
+      <nav class="px-2 pb-2 grid grid-cols-3 gap-2 max-w-5xl mx-auto">
+        <button data-tab="add" class="tab-btn px-3 py-2 rounded-xl text-sm font-medium bg-slate-900 text-white">新增/編輯</button>
+        <button data-tab="list" class="tab-btn px-3 py-2 rounded-xl text-sm font-medium bg-white border border-slate-200">名單查詢</button>
+        <button data-tab="members" class="tab-btn px-3 py-2 rounded-xl text-sm font-medium bg-white border border-slate-200">成員管理</button>
+      </nav>
+    </header>
+
+    <main class="flex-1 px-4 pb-24">
+      <!-- ADD / EDIT CLIENT -->
+      <section id="tab-add" class="tab mt-4">
+        <form id="clientForm" class="space-y-3 max-w-3xl">
+          <input type="hidden" id="clientId" />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium mb-1">廠商名稱 <span class="text-red-600">*</span></label>
+              <input id="name" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white" placeholder="例：幸福海鮮餐廳" required />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">行業類型</label>
+              <input id="industry" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white" placeholder="例：餐廳、零售" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium mb-1">誰的客戶（來源成員） <span class="text-red-600">*</span></label>
+              <select id="owner" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white"></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">拜訪狀態</label>
+              <select id="status" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white">
+                <option value="未拜訪">未拜訪</option>
+                <option value="已聯繫">已聯繫</option>
+                <option value="已拜訪">已拜訪</option>
+                <option value="追蹤中">追蹤中</option>
+                <option value="成交">成交</option>
+                <option value="冷卻">冷卻</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium mb-1">可以推薦的產品（逗號分隔）</label>
+              <input id="recommended" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white" placeholder="例：烏魚子米蛋捲, 鮭魚鬆米蛋捲" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">下次跟進日</label>
+              <input id="nextFollow" type="date" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1">備註</label>
+            <textarea id="discussion" rows="3" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white" placeholder="例如：建議先送試吃、搭配禮盒…"></textarea>
+          </div>
+
+          <div class="flex items-center gap-2 pt-2">
+            <button id="btnSave" class="flex-1 px-4 py-3 rounded-2xl bg-blue-600 text-white font-medium active:scale-95">儲存</button>
+            <button type="button" id="btnReset" class="px-4 py-3 rounded-2xl border border-slate-300 bg-white active:scale-95">清空</button>
+            <button type="button" id="btnDelete" class="hidden px-5 py-3 rounded-2xl bg-rose-600 text-white active:scale-95">刪除</button>
+          </div>
+
+          <p class="text-xs text-slate-500">（系統會自動建立快速查詢欄位：nameLC、ownerLC）</p>
+        </form>
+
+        <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-3 space-y-2 max-w-3xl">
+          <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="font-medium">快速導入客戶（貼上文字）</div>
+      <button id="btnShowFormat" class="text-xs underline">格式說明</button>
+    </div>
+    <textarea id="pasteInput" rows="8" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white" placeholder="每行一筆，支援分隔符：逗號、分號、Tab；欄位順序：名稱, 行業, 來源成員, 推薦產品
+例如：
+金大麵食坊溫州餛飩大王, 餐館, 楊南笛, 丸子湯，冷泡茶
+一口餛飩; 餐館; 楊南笛; 丸子湯，冷泡茶
+邊疆燒烤(陳杰忠)    餐館    楊南笛    烤火鍋料，冷泡茶（居酒屋）"></textarea>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <button id="btnPreviewPaste" class="px-3 py-2 rounded-xl border border-slate-300 bg-white active:scale-95 w-full">預覽解析（不寫入）</button>
+      <button id="btnImportPaste" class="px-3 py-2 rounded-xl bg-slate-900 text-white active:scale-95 w-full">一鍵建檔</button>
+      <button id="btnTestWrite" class="px-3 py-2 rounded-xl bg-emerald-600 text-white active:scale-95 w-full">測試寫入權限</button>
+    </div>
+    <div id="previewPanel" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs whitespace-pre-wrap"></div>
+  </div>
+
+        </div>
+      </section>
+
+      <!-- LIST / QUERY (TABLE) -->
+      <section id="tab-list" class="tab hidden mt-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-3">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input id="q" class="px-3 py-2 rounded-xl border border-slate-300 bg-white" placeholder="輸入『廠商名稱』或『誰的客戶』查詢（留空＝查全部）" />
+            <select id="filterOwner" class="px-3 py-2 rounded-xl border border-slate-300 bg-white">
+              <option value="">誰的客戶（全部）</option>
+            </select>
+            <div></div><div></div>
+          </div>
+          <div class="flex items-center gap-2 mt-3">
+            <button id="btnQuery" class="px-3 py-2 rounded-xl bg-slate-900 text-white active:scale-95">查詢</button>
+            <button id="btnShowAll" class="px-3 py-2 rounded-xl border border-slate-300 bg-white active:scale-95">顯示全部</button>
+            <button id="btnLoadMore" class="ml-auto px-3 py-2 rounded-xl border border-slate-300 bg-white active:scale-95">載入更多</button>
+          </div>
+          <div class="overflow-x-auto mt-3">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:26%">廠商名稱</th>
+                  <th style="width:18%">行業類型</th>
+                  <th style="width:16%">誰的客戶</th>
+                  <th style="width:22%">可推薦產品</th>
+                  <th style="width:10%">狀態</th>
+                  <th style="width:8%">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+          <div id="upgradeStatus" class="text-xs text-slate-500 mt-2"></div>
+          <p class="text-xs text-slate-500 mt-2">提示：關鍵字同時比對「廠商名稱（前綴）」與「誰的客戶（全名）」。狀態不影響結果。</p>
+        </div>
+      </section>
+
+      <!-- MEMBERS -->
+      <section id="tab-members" class="tab hidden mt-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-3 space-y-4">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <input id="memberName" class="px-3 py-2 rounded-xl border border-slate-300 bg-white" placeholder="成員名稱（必填）」 />
+            <input id="memberIndustry" class="px-3 py-2 rounded-xl border border-slate-300 bg-white" placeholder="行業別（例：水產批發零售）" />
+            <button id="btnAddMember" class="px-3 py-2 rounded-xl bg-emerald-600 text-white active:scale-95">新增成員</button>
+          </div>
+
+          <div class="grid gap-2 md:grid-cols-2">
+            <div>
+              <label class="text-sm font-medium">CSV 匯入（欄位：姓名, 行業別）</label>
+              <input id="memberCsv" type="file" accept=".csv,text/csv" class="block w-full text-sm" />
+              <button id="btnImportCsv" class="mt-2 px-3 py-2 rounded-xl border border-slate-300 bg-white active:scale-95 w-full">匯入 CSV 成員</button>
+            </div>
+            <div>
+              <label class="text-sm font-medium">快速貼上（每行：姓名, 行業別；僅姓名也可）</label>
+              <textarea id="memberBulk" rows="4" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white" placeholder="例：
+南笛, 水產批發零售
+舜瑋, 魚漿煉製品批發發代工
+聖閔, 牛肉批發零售
+宜芳, 沖泡式飲品品牌電商"></textarea>
+              <button id="btnBulkAdd" class="mt-2 px-3 py-2 rounded-xl border border-slate-300 bg-white active:scale-95 w-full">從貼上清單新增</button>
+            </div>
+          </div>
+
+          <ul id="memberList" class="mt-1 divide-y divide-slate-200"></ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200 p-3">
+      <div class="max-w-5xl mx-auto grid grid-cols-2 gap-2">
+        <button class="px-4 py-3 rounded-2xl bg-slate-900 text-white font-medium active:scale-95" data-tab="add">＋ 新增客戶</button>
+        <button class="px-4 py-3 rounded-2xl border border-slate-300 bg-white active:scale-95" data-tab="list">名單查詢</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <script>
+    // ===== Firebase Config（請替換） =====
+    const firebaseConfig = {
+  apiKey: "AIzaSyAADShDBMR3ABGXQH-zSQfpWtdIuAj8rQE",
+  authDomain: "foodsupply-powerteam.firebaseapp.com",
+  projectId: "foodsupply-powerteam",
+  storageBucket: "foodsupply-powerteam.firebasestorage.app",
+  messagingSenderId: "324648121385",
+  appId: "1:324648121385:web:56c3dfe5cf376da35e9838",
+  measurementId: "G-RKJM4407XQ"
+};
+
+    // ===== Init Firestore =====
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    db.enablePersistence().catch(()=>{});
+
+    // ===== Helpers =====
+
+async function readFileSmart(file){
+  // 以 ArrayBuffer 讀檔，嘗試 UTF-8，再偵測是否大量替代字元（�），若是則改用 Big5
+  const buf = await file.arrayBuffer();
+  const tryDecode = (enc) => {
+    try{ return new TextDecoder(enc).decode(buf); }catch(e){ return null; }
+  };
+  let text = tryDecode('utf-8') || '';
+  const bad = (text.match(/\uFFFD/g)||[]).length;
+  if (bad > 8) { // 有大量 � 代表編碼不對，嘗試 big5（CP950）
+    const big5 = tryDecode('big5') || tryDecode('cp950');
+    if (big5) text = big5;
+  }
+  return text;
+}
+
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => Array.from(document.querySelectorAll(s));
+    function toast(msg){ const t=document.createElement('div'); t.textContent=msg; t.className='fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-3 py-2 rounded-xl shadow-lg z-50'; document.body.appendChild(t); setTimeout(()=>t.remove(),1800); }
+    function switchTab(tab){ $$('.tab-btn').forEach(b=>{ b.classList.toggle('bg-slate-900',b.dataset.tab===tab); b.classList.toggle('text-white',b.dataset.tab===tab); b.classList.toggle('border',b.dataset.tab!==tab); b.classList.toggle('border-slate-200',b.dataset.tab!==tab); b.classList.toggle('bg-white',b.dataset.tab!==tab); }); $$('.tab').forEach(sec=>sec.classList.toggle('hidden', sec.id!=='tab-'+tab)); }
+    $$('.tab-btn, footer [data-tab]').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));
+    function lc(s){ return (s||'').toString().trim().toLowerCase(); }
+    const getServerFirst = async (q) => {
+      try { return await q.get({ source: 'server' }); }
+      catch(e){ console.warn('server get failed, fallback to default', e); return await q.get(); }
+    };
+
+    // ===== Members =====
+    const ownerSel = $('#owner');
+    const memberList = $('#memberList');
+    async function getMemberMap(){ const map=new Map(); const snap=await db.collection('members').get(); snap.forEach(d=>map.set((d.data().name||'').trim(), d.id)); return map; }
+    async function ensureMember(name, industry=''){ if(!name) return null; const map=await getMemberMap(); if(map.has(name)) return map.get(name); const now=firebase.firestore.FieldValue.serverTimestamp(); const ref = await db.collection('members').add({name, industry, createdAt: now}); return ref.id; }
+    async function addMembers(arr){ const now=firebase.firestore.FieldValue.serverTimestamp(); const exist=await getMemberMap(); const tasks=[]; arr.forEach(it=>{ const name=(it?.name||'').trim(); const industry=(it?.industry||'').trim(); if(!name) return; if(exist.has(name)) return; tasks.push(db.collection('members').add({name,industry,createdAt:now})); exist.set(name,true); }); if(tasks.length) await Promise.all(tasks); }
+    async function renderMembers(){ ownerSel.innerHTML=''; const opt=document.createElement('option'); opt.value=''; opt.textContent='請選擇成員'; ownerSel.appendChild(opt); memberList.innerHTML=''; const snap=await db.collection('members').orderBy('name').get(); snap.forEach(doc=>{ const m={id:doc.id,...doc.data()}; const o=document.createElement('option'); o.value=m.name; o.textContent=m.industry?`${m.name}（${m.industry}）`:m.name; ownerSel.appendChild(o); const li=document.createElement('li'); li.className='py-2 flex items-center gap-2'; li.innerHTML=`<input class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 bg-white" data-field="name" value="${m.name||''}"> <input class="flex-[1.2] min-w-0 px-3 py-2 rounded-xl border border-slate-300 bg-white" data-field="industry" placeholder="行業別" value="${m.industry||''}"> <button class="px-2 py-2 rounded-lg bg-blue-600 text-white text-xs" data-act="save">儲存</button> <button class="px-2 py-2 rounded-lg bg-rose-600 text-white text-xs" data-act="del">刪除</button>`;
+      const inpName=li.querySelector('[data-field="name"]'); const inpInd=li.querySelector('[data-field="industry"]');
+      li.querySelector('[data-act="save"]').onclick=async()=>{ const newName=inpName.value.trim(); const newInd=inpInd.value.trim(); if(!newName) return toast('成員名稱不可空白'); try{ await db.collection('members').doc(m.id).update({name:newName, industry:newInd, updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); toast('已更新成員'); renderMembers(); }catch(e){ console.error(e); toast('更新失敗'); } };
+      li.querySelector('[data-act="del"]').onclick=async()=>{ if(!confirm(`確定刪除成員「${m.name}」？`)) return; try{ await db.collection('members').doc(m.id).delete(); toast('已刪除成員'); renderMembers(); }catch(e){ console.error(e); toast('刪除成員失敗'); } };
+      memberList.appendChild(li); }); }
+
+    document.getElementById('btnAddMember').addEventListener('click', async ()=>{ const name=$('#memberName').value.trim(); const industry=$('#memberIndustry').value.trim(); if(!name) return toast('請輸入成員名稱'); await addMembers([{name,industry}]); $('#memberName').value=''; $('#memberIndustry').value=''; toast('已新增成員'); renderMembers(); });
+    document.getElementById('btnImportCsv').addEventListener('click', async ()=>{ const file=$('#memberCsv').files[0]; if(!file) return toast('請選擇CSV'); const text = await readFileSmart(file); const lines=text.split(/\\r?\\n/).map(l=>l.trim()).filter(Boolean); const arr=[]; lines.forEach((line,idx)=>{ const parts=line.split(/[;,\t,]/).map(s=>s.replace(/^\\ufeff/,'').trim()); if(!parts[0]) return; if(idx===0 && /name|姓名|成員/i.test(parts[0])) return; arr.push({name:parts[0], industry:parts[1]||''}); }); if(!arr.length) return toast('CSV 內未找到成員'); await addMembers(arr); toast(`已匯入 ${arr.length} 位成員`); renderMembers(); });
+    document.getElementById('btnBulkAdd').addEventListener('click', async ()=>{ const raw=$('#memberBulk').value||''; const arr=raw.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean).map(line=>{ const [n,ind='']=line.split(/[;,\t,]/).map(x=>x.trim()); return {name:n, industry:ind}; }); if(!arr.length) return toast('請貼上成員'); await addMembers(arr); $('#memberBulk').value=''; toast(`已新增 ${arr.length} 位成員`); renderMembers(); });
+
+    // ===== Clients =====
+    const form=$('#clientForm');
+    const btnDelete=$('#btnDelete');
+    let editingId=null;
+    const tableBody=$('#tableBody');
+
+    function formData(){
+      const name = $('#name').value.trim();
+      const owner = $('#owner').value;
+      return {
+        name, industry:$('#industry').value.trim(),
+        owner, status:$('#status').value,
+        nextFollow: $('#nextFollow').value? new Date($('#nextFollow').value): null,
+        recommended:$('#recommended').value.trim(),
+        notes:$('#discussion').value.trim(),
+        nameLC: lc(name), ownerLC: lc(owner),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+    }
+    function fillForm(c){
+      $('#clientId').value=c.id||'';
+      $('#name').value=c.name||''; $('#industry').value=c.industry||'';
+      $('#owner').value=c.owner||''; $('#status').value=c.status||'未拜訪';
+      try{ $('#nextFollow').value= c.nextFollow? new Date((c.nextFollow.seconds? c.nextFollow.seconds*1000 : c.nextFollow)).toISOString().slice(0,10):''; }catch(e){ $('#nextFollow').value=''; }
+      $('#recommended').value=c.recommended||''; $('#discussion').value=c.notes||'';
+      editingId=c.id||null; btnDelete.classList.toggle('hidden', !editingId);
+    }
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const d=formData();
+      if(!d.name) return toast('請輸入廠商名稱');
+      if(!d.owner) return toast('請選擇來源成員');
+      try{
+        if(editingId){ await db.collection('clients').doc(editingId).update(d); toast('已更新'); }
+        else{ await db.collection('clients').add({ ...d, createdAt: firebase.firestore.FieldValue.serverTimestamp(), comments: [] }); toast('已新增'); }
+        form.reset(); editingId=null; btnDelete.classList.add('hidden');
+        switchTab('list'); await runQuery(true, /*forceServer*/ true);
+      }catch(err){ console.error(err); toast('儲存失敗'); }
+    });
+    document.getElementById('btnReset').addEventListener('click', ()=>{ form.reset(); editingId=null; btnDelete.classList.add('hidden'); });
+    btnDelete.addEventListener('click', async (e)=>{
+      e.preventDefault(); if(!editingId) return;
+      if(!confirm('確定刪除此客戶？')) return;
+      try{
+        await db.collection('clients').doc(editingId).delete();
+        toast('已刪除');
+        form.reset(); editingId=null; btnDelete.classList.add('hidden');
+        switchTab('list'); await runQuery(true, /*forceServer*/ true);
+      }catch(err){ console.error(err); toast('刪除失敗，請檢查權限或網路'); }
+    });
+
+    function rowTpl(c){
+      const el=document.createElement('tr');
+      el.dataset.id = c.id;
+      el.innerHTML = `
+        <td class="font-medium">${c.name||''}</td>
+        <td>${c.industry||''}</td>
+        <td>${c.owner||''}</td>
+        <td>${c.recommended||''}</td>
+        <td><span class="inline-block px-2 py-0.5 rounded-lg bg-slate-100">${c.status||'未拜訪'}</span></td>
+        <td>
+          <div class="flex items-center gap-2">
+            <button class="btn-row btn-row-edit" data-act="edit">編輯</button>
+            <button class="btn-row btn-row-del" data-act="del">刪除</button>
+          </div>
+        </td>`;
+      el.querySelector('[data-act="edit"]').onclick=()=>{ fillForm({id:c.id,...c}); switchTab('add'); };
+      el.querySelector('[data-act="del"]').onclick=async()=>{
+        if(!confirm(`刪除「${c.name}」？`)) return;
+        const tr = el;
+        const tbody = tr.parentElement;
+        const idx = Array.prototype.indexOf.call(tbody.children, tr);
+        // Optimistic UI: remove immediately
+        tr.style.opacity = 0.5; tr.style.pointerEvents = 'none';
+        tbody.removeChild(tr);
+        let restored = false;
+        try{
+          await db.collection('clients').doc(c.id).delete();
+          toast('已刪除');
+          // Force refresh from server so列表不會因 cache 延遲
+          await runQuery(true, /*forceServer*/ true);
+        }catch(e){
+          console.error(e);
+          // Restore row if delete failed
+          restored = true;
+          if (tbody) tbody.insertBefore(tr, tbody.children[idx] || null);
+          tr.style.opacity = ''; tr.style.pointerEvents='';
+          toast('刪除失敗，請檢查權限或網路');
+        }
+      };
+      return el;
+    }
+
+    // ===== Filters / Query =====
+    async function fillOwnerFilter(){
+      const sel=$('#filterOwner'); sel.innerHTML='<option value="">誰的客戶（全部）</option>';
+      const ms=await db.collection('members').orderBy('name').get();
+      ms.forEach(d=>{ const m=d.data().name; const o=document.createElement('option'); o.value=m; o.textContent=m; sel.appendChild(o); });
+    }
+
+    let mode='all'; // 'all' | 'owner' | 'kw'
+    let cursor=null; // for pagination (all / owner)
+    let inFlight=false, pending=false;
+
+    function showSkeletonRows(n=8){
+      const tbody=document.getElementById('tableBody');
+      tbody.innerHTML='';
+      for(let i=0;i<n;i++){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td><div class="h-4 rounded skeleton"></div></td>
+          <td><div class="h-4 rounded skeleton"></div></td>
+          <td><div class="h-4 rounded skeleton"></div></td>
+          <td><div class="h-4 rounded skeleton"></div></td>
+          <td><div class="h-4 rounded skeleton"></div></td>
+          <td><div class="h-8 w-20 rounded skeleton"></div></td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function runQuery(reset=false, forceServer=false){
+      if(inFlight){ pending=true; return; }
+      inFlight=true;
+      const tbody=document.getElementById('tableBody');
+      if(reset){ tbody.innerHTML=''; cursor=null; showSkeletonRows(); }
+
+      const kwRaw = ($('#q').value||'').trim();
+      const kw = kwRaw.toLowerCase();
+      const ownerFilter = $('#filterOwner').value;
+
+      // Determine mode
+      if(kw){
+        mode='kw';
+      }else if(ownerFilter){
+        mode='owner';
+      }else{
+        mode='all';
+      }
+
+      try{
+        if(mode==='all'){
+          let q=db.collection('clients').orderBy('updatedAt','desc').limit(50);
+          if(cursor) q=q.startAfter(cursor);
+          const snap = forceServer ? await getServerFirst(q) : await q.get();
+          if(reset) tbody.innerHTML='';
+          if(!snap.empty) cursor = snap.docs[snap.docs.length-1];
+          snap.forEach(doc=> tbody.appendChild(rowTpl({id:doc.id,...doc.data()})));
+          document.getElementById('btnLoadMore').disabled = snap.empty;
+        }else if(mode==='owner'){
+          let q = db.collection('clients').where('owner','==', ownerFilter).orderBy('updatedAt','desc').limit(200);
+          let snap = null;
+          try { snap = forceServer ? await getServerFirst(q) : await q.get(); }
+          catch(e){
+            // fallback without orderBy if composite index 未建立
+            q = db.collection('clients').where('owner','==', ownerFilter).limit(200);
+            snap = forceServer ? await getServerFirst(q) : await q.get();
+          }
+          if(reset) tbody.innerHTML='';
+          snap.forEach(doc=> tbody.appendChild(rowTpl({id:doc.id,...doc.data()})));
+          document.getElementById('btnLoadMore').disabled = true;
+        }else{
+          // mode === 'kw'
+          const tasks = [];
+          let q1 = db.collection('clients').where('nameLC','>=', kw).where('nameLC','<', kw + '\\uf8ff').orderBy('nameLC').limit(120);
+          tasks.push(forceServer ? getServerFirst(q1) : q1.get().catch(async e=>{
+            return await db.collection('clients').where('nameLC','>=', kw).where('nameLC','<', kw + '\\uf8ff').limit(120).get();
+          }));
+          const q2 = db.collection('clients').where('ownerLC','==', kw).limit(120);
+          tasks.push(forceServer ? getServerFirst(q2) : q2.get());
+          const res = await Promise.all(tasks);
+          const seen = new Set();
+          if(reset) tbody.innerHTML='';
+          for(const snap of res){
+            snap.forEach(doc=>{
+              if(seen.has(doc.id)) return;
+              seen.add(doc.id);
+              tbody.appendChild(rowTpl({id:doc.id,...doc.data()}));
+            });
+          }
+          document.getElementById('btnLoadMore').disabled = true;
+        }
+      }catch(err){
+        console.error(err);
+        toast('查詢失敗');
+      }finally{
+        inFlight=false;
+        if(pending){ pending=false; runQuery(true, forceServer); }
+      }
+    }
+
+    // Buttons & Debounce input
+    document.getElementById('btnQuery').addEventListener('click', ()=>runQuery(true));
+    document.getElementById('btnShowAll').addEventListener('click', ()=>{ document.getElementById('q').value=''; document.getElementById('filterOwner').value=''; runQuery(true); });
+    document.getElementById('btnLoadMore').addEventListener('click', ()=>runQuery(false));
+    document.getElementById('filterOwner').addEventListener('change', ()=>runQuery(true));
+    let debounceTimer=null;
+    document.getElementById('q').addEventListener('input', ()=>{
+      if(debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(()=> runQuery(true), 300);
+    });
+    document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); runQuery(true); }});
+
+    // ===== Export CSV =====
+    document.getElementById('btnExport').addEventListener('click', async ()=>{
+      const snap=await db.collection('clients').orderBy('updatedAt','desc').limit(2000).get();
+      const rows=[["name","industry","owner","recommended","status","nextFollow","notes","createdAt","updatedAt"]];
+      snap.forEach(doc=>{
+        const c={id:doc.id,...doc.data()};
+        const ts=(t)=>{ if(!t) return ''; if (t.seconds) return new Date(t.seconds*1000).toISOString(); const d=new Date(t); return isNaN(d)? '' : d.toISOString(); };
+        const nf=(c.nextFollow?.seconds? new Date(c.nextFollow.seconds*1000): (c.nextFollow? new Date(c.nextFollow): null));
+        const nfStr=nf? nf.toISOString().slice(0,10):'';
+        rows.push([c.name||'',c.industry||'',c.owner||'',c.recommended||'',c.status||'',nfStr,(c.notes||'').replace(/\\n/g,' '),ts(c.createdAt),ts(c.updatedAt)]);
+      });
+      const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='clients_min.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // ===== CSV utils =====
+    function detectDelimiter(line){
+      const c = { ',': (line.match(/,/g)||[]).length, ';': (line.match(/;/g)||[]).length, '\t': (line.match(/\t/g)||[]).length, 'tab': (line.match(/\t/g)||[]).length };
+      let d=','; let max=c[','];
+      if (c[';']>max){ d=';'; max=c[';']; }
+      // check literal tab count
+      if (c['\t']>max){ d='\t'; }
+      return d;
+    }
+    function stripBOM(s){ return s.replace(/^\\ufeff/, ''); }
+    function parseCSV(text){
+      text = text.replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n');
+      const lines = text.split('\\n').filter(l=>l.trim().length>0);
+      if(!lines.length) return [];
+      const delim = detectDelimiter(lines[0]);
+      const out=[];
+      for(const raw of lines){
+        const line = stripBOM(raw);
+        const row=[];
+        let cur=''; let inQ=false;
+        for(let i=0;i<line.length;i++){
+          const ch=line[i];
+          const isDelim = (delim==='\t'? ch==='\t' : ch===delim);
+          if(ch === '"'){
+            if(inQ && line[i+1]==='"'){ cur+='"'; i++; }
+            else { inQ = !inQ; }
+          }else if(isDelim && !inQ){
+            row.push(cur); cur='';
+          }else{
+            cur+=ch;
+          }
+        }
+        row.push(cur);
+        out.push(row.map(s=>s.trim()));
+      }
+      return out;
+    }
+    function normHeader(h){
+      const map = {
+        '姓名':'name','客戶名稱':'name','廠商名稱':'name','name':'name','公司':'name',
+        '行業':'industry','行業類型':'industry','行業別':'industry','industry':'industry',
+        '來源':'owner','來源成員':'owner','誰的客戶':'owner','owner':'owner',
+        '推薦產品':'recommended','可以推薦的產品':'recommended','recommended':'recommended'
+      };
+      const k = h.replace(/\\s+/g,'').toLowerCase();
+      return map[h.toLowerCase()] || map[k] || h.toLowerCase();
+    }
+
+    async function importClientsFromCSVText(text){
+      const rows=parseCSV(text);
+      if(!rows.length){ toast('CSV為空'); return; }
+      const headers=rows[0].map(h=>normHeader(stripBOM(h)));
+      const idx=(k)=> headers.findIndex(h=>h===k);
+      const nameI = idx('name')>-1? idx('name'):0;
+      const indI = idx('industry'); const ownerI=idx('owner'); const recoI=idx('recommended');
+      const now=firebase.firestore.FieldValue.serverTimestamp();
+      let created=0, skipped=0, ensuredMembers=0; let toCreate=[];
+
+      let memberMap = await getMemberMap();
+
+      for(let i=1;i<rows.length;i++){
+        const cols=rows[i];
+        const name=(cols[nameI]||'').trim().replace(/^"|"$/g,'');
+        if(!name){ skipped++; continue; }
+        const ownerRaw = ownerI>-1? (cols[ownerI]||'').trim().replace(/^"|"$/g,'') : '';
+        if(ownerRaw && !memberMap.has(ownerRaw)){
+          await ensureMember(ownerRaw,'');
+          ensuredMembers++;
+          memberMap = await getMemberMap();
+        }
+        const payload={
+          name,
+          industry: indI>-1?(cols[indI]||'').trim():'',
+          owner: ownerRaw || '',
+          status: '未拜訪',
+          nextFollow: null,
+          recommended: recoI>-1?(cols[recoI]||'').trim():'',
+          notes: '',
+          nameLC: (name||'').toLowerCase(), ownerLC: (ownerRaw||'').toLowerCase(),
+          createdAt: now, updatedAt: now, comments: []
+        };
+        toCreate.push(payload);
+      }
+      try{
+        created = await addClientsInBatches(toCreate);
+        toast(`已匯入 ${created} 筆，略過 ${skipped} 筆（自動新增成員 ${ensuredMembers} 位）`);
+        document.getElementById('importSummary').textContent = `匯入完成：新增 ${created} / 略過 ${skipped}；自動建立來源成員 ${ensuredMembers} 位。`;
+        await runQuery(true, /*forceServer*/ true);
+      }catch(e){
+        console.error(e);
+        const msg = (e && e.code) ? `錯誤代碼：${e.code}` : (e?.message || '未知錯誤');
+        document.getElementById('importSummary').textContent = '匯入失敗，請檢查 Firestore 規則或網路。' + ' ' + msg;
+        toast('匯入失敗');
+      }
+    }
+
+    document.getElementById('btnSampleCsv').addEventListener('click', ()=>{
+      const header='name,industry,owner,recommended\\n';
+      const blob=new Blob([header],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='clients-sample-fast.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('btnImportClients').addEventListener('click', async ()=>{
+      const file=document.getElementById('clientCsv').files[0]; if(!file) return toast('請選擇CSV');
+      const text = await readFileSmart(file); await importClientsFromCSVText(text);
+    });
+    document.getElementById('btnImportFromUrl').addEventListener('click', async ()=>{
+      const url=document.getElementById('sheetUrl').value.trim();
+      if(!url) return toast('請貼上 CSV 連結');
+      try{
+        const res=await fetch(url);
+        if(!res.ok) throw new Error('下載失敗');
+        const text=await res.text();
+        await importClientsFromCSVText(text);
+      }catch(e){ console.error(e); toast('下載或匯入失敗（若為 Google 連結，請確認已「發布到網路」為 CSV）'); }
+    });
+
+    
+
+// ===== Paste Import: parser & actions (non-destructive add-on) =====
+function smartSplit(line){
+  if(line.includes(',')) return line.split(',').map(s=>s.trim());
+  if(line.includes(';')) return line.split(';').map(s=>s.trim());
+  if(line.includes('\t')) return line.split('\t').map(s=>s.trim());
+  const parts = line.split(/\s{2,}/).map(s=>s.trim());
+  if(parts.length>1) return parts;
+  const p2 = line.split(/\s+/).map(s=>s.trim());
+  return p2.length>=3? p2 : [line];
+}
+function parsePastedList(text){
+  const lines = (text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const rows = [];
+  for(const raw of lines){
+    const line = raw.replace(/^\ufeff/, '');
+    if(!line) continue;
+    const arr = smartSplit(line);
+    const name = (arr[0]||'').trim();
+    const industry = (arr[1]||'').trim();
+    const owner = (arr[2]||'').trim();
+    const recommended = (arr.slice(3).join('、')||'').trim();
+    if(!name) continue;
+    rows.push({ name, industry, owner, recommended });
+  }
+  return rows;
+}
+(function bindPasteImport(){
+  const fmt = document.getElementById('btnShowFormat');
+  if(fmt){ fmt.addEventListener('click', ()=>{
+    alert(['支援分隔：逗號、分號、Tab、或兩個以上空白','欄位順序：名稱, 行業, 來源成員, 推薦產品（後面可省略）','例：幸福海鮮餐廳, 餐館, 楊南笛, 冷泡茶；丸子湯'].join('\n'));
+  });}
+  const prev = document.getElementById('btnPreviewPaste');
+  if(prev){ prev.addEventListener('click', ()=>{
+    const rows = parsePastedList(document.getElementById('pasteInput')?.value||'');
+    const panel = document.getElementById('previewPanel');
+    if(!panel) return;
+    if(!rows.length){ panel.classList.add('hidden'); toast('沒有可解析的資料'); return; }
+    panel.classList.remove('hidden');
+    panel.textContent = '預覽前 20 筆：\n' + JSON.stringify(rows.slice(0,20), null, 2);
+    const s = document.getElementById('importSummary'); if(s) s.textContent = `可解析 ${rows.length} 筆資料。`;
+  });}
+  const imp = document.getElementById('btnImportPaste');
+  if(imp){ imp.addEventListener('click', async ()=>{
+    const rows = parsePastedList(document.getElementById('pasteInput')?.value||'');
+    if(!rows.length) return toast('沒有可解析的資料');
+    try{
+      let ensuredMembers = 0;
+      let memberMap = await getMemberMap();
+      for(const r of rows){
+        const owner = (r.owner||'').trim();
+        if(owner && !memberMap.has(owner)){
+          await ensureMember(owner, '');
+          ensuredMembers++;
+          memberMap = await getMemberMap();
+        }
+      }
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      const payloads = rows.map(r=>({
+        name: r.name,
+        industry: r.industry||'',
+        owner: r.owner||'',
+        status: '未拜訪',
+        nextFollow: null,
+        recommended: r.recommended||'',
+        notes: '',
+        nameLC: (r.name||'').toLowerCase(),
+        ownerLC: (r.owner||'').toLowerCase(),
+        createdAt: now, updatedAt: now, comments: []
+      }));
+      const created = await addClientsInBatches(payloads);
+      toast(`已匯入 ${created} 筆（自動新增成員 ${ensuredMembers} 位）`);
+      const s = document.getElementById('importSummary'); if(s) s.textContent = `匯入完成：新增 ${created}；自動建立來源成員 ${ensuredMembers} 位。`;
+      const ta = document.getElementById('pasteInput'); if(ta) ta.value='';
+      const panel = document.getElementById('previewPanel'); if(panel) panel.classList.add('hidden');
+      await runQuery(true, /*forceServer*/ true);
+    }catch(e){
+      console.error(e);
+      const s = document.getElementById('importSummary');
+      const msg = (e && e.code) ? `錯誤代碼：${e.code}` : (e?.message || '未知錯誤');
+      if(s) s.textContent = '匯入失敗，請檢查 Firestore 規則或網路。 ' + msg;
+      toast('匯入失敗');
+    }
+  });}
+})(); 
+
+// ===== Test Firestore write access =====
+document.getElementById('btnTestWrite').addEventListener('click', async ()=>{
+  try{
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    const ref = await db.collection('clients').add({ name: '（測試）寫入測試', owner: '系統', status: '未拜訪', createdAt: now, updatedAt: now, nameLC: '（測試）寫入測試', ownerLC: '系統', comments: [] });
+    toast('✅ 可寫入 Firestore（已新增測試資料）');
+    setTimeout(()=>{ db.collection('clients').doc(ref.id).delete().catch(()=>{}); }, 1500);
+  }catch(e){
+    console.error(e);
+    const msg = (e && e.code) ? `錯誤代碼：${e.code}` : (e?.message || '未知錯誤');
+    document.getElementById('importSummary').textContent = '❌ 無法寫入，請檢查 Firestore 規則或網路。' + ' ' + msg;
+    toast('無法寫入（請檢查規則）');
+  }
+});
+
+// ===== Batch add helper to avoid rate limits =====
+async function addClientsInBatches(payloads){
+  const CHUNK = 400; // Firestore batch limit is 500 ops;留餘裕
+  let created = 0;
+  for(let i=0;i<payloads.length;i+=CHUNK){
+    const slice = payloads.slice(i, i+CHUNK);
+    const batch = db.batch();
+    slice.forEach(p=>{
+      const ref = db.collection('clients').doc();
+      batch.set(ref, p);
+    });
+    await batch.commit();
+    created += slice.length;
+  }
+  return created;
+}
+
+    // ===== One-click Upgrade: fill nameLC / ownerLC for existing docs =====
+    async function upgradeIndices(){
+      if(!confirm('將為所有現有客戶補齊 nameLC / ownerLC 欄位，開始？')) return;
+      const statusEl = document.getElementById('upgradeStatus');
+      let scanned = 0, updated = 0, skipped = 0, batchCount=0;
+      statusEl.textContent = '準備中…';
+
+      try{
+        let last = null;
+        let more = true;
+        while(more){
+          let q = db.collection('clients').orderBy('updatedAt').limit(450);
+          if(last) q = q.startAfter(last);
+          const snap = await getServerFirst(q);
+          more = !snap.empty && snap.docs.length === 450;
+          if(!snap.empty) last = snap.docs[snap.docs.length-1];
+          if(snap.empty){ break; }
+
+          let batch = db.batch();
+          let ops = 0;
+
+          snap.forEach(doc=>{
+            scanned++;
+            const c = doc.data();
+            const wantNameLC = lc(c.name);
+            const wantOwnerLC = lc(c.owner);
+            const curNameLC = c.nameLC;
+            const curOwnerLC = c.ownerLC;
+            if(curNameLC !== wantNameLC || curOwnerLC !== wantOwnerLC){
+              batch.update(doc.ref, { nameLC: wantNameLC, ownerLC: wantOwnerLC });
+              ops++;
+            }else{
+              skipped++;
+            }
+          });
+
+          if(ops>0){
+            await batch.commit();
+            updated += ops;
+            batchCount++;
+          }
+          statusEl.textContent = `處理中… 已掃描 ${scanned} 筆，已更新 ${updated} 筆，略過 ${skipped} 筆。`;
+        }
+
+        statusEl.textContent = `完成！共掃描 ${scanned} 筆，更新 ${updated} 筆，略過 ${skipped} 筆（批次提交 ${batchCount} 次）。`;
+        toast('升級完成');
+        await runQuery(true, /*forceServer*/ true);
+      }catch(e){
+        console.error(e);
+        statusEl.textContent = '升級失敗，請查看主控台錯誤訊息。';
+        toast('升級失敗');
+      }
+    }
+    document.getElementById('btnUpgrade').addEventListener('click', upgradeIndices);
+
+    // ===== Boot =====
+    async function seedMembersIfEmpty() {
+      const snap = await db.collection('members').limit(1).get();
+      if (!snap.empty) return;
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      const defaults = [
+        { name: '南笛', industry: '水產批發零售' },
+        { name: '舜瑋', industry: '魚漿煉製品批發發代工' },
+        { name: '聖閔', industry: '牛肉批發零售' },
+        { name: '宜芳', industry: '沖泡式飲品品牌電商' },
+      ];
+      await Promise.all(defaults.map(m => db.collection('members').add({ ...m, createdAt: now })));
+    }
+
+    async function boot(){ await seedMembersIfEmpty(); await renderMembers(); await fillOwnerFilter(); runQuery(true); }
+    document.addEventListener('DOMContentLoaded', boot);
+  </script>
+</body>
+</html>
